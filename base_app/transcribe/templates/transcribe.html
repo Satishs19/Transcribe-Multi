@@ -1,0 +1,192 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech to Text</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        .btn-record {
+            font-size: 1.5rem;
+            padding: 1rem 2rem;
+        }
+        .recording {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        body{
+            background-image: url("{% static 'bg.png' %}");
+        }
+    </style>
+</head>
+<body class="bg">
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-graduation-cap me-2"></i>
+                TechSpeech
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="#">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Help</a>
+                    </li>
+                </ul>
+                <span class="navbar-text">
+                    <i class="fas fa-user me-2"></i>
+                    Speech Portal
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-3">
+        <h2 class="text-center mb-4">
+            <i class="fas fa-microphone-alt text-primary me-2"></i>
+            Speech to Text
+        </h2>
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <!-- <h5 class="card-title mb-4">
+                            <i class="fas fa-pencil-alt text-secondary me-2"></i>
+                            Dictate Your Questions
+                        </h5> -->
+                        
+                        <div class="mb-3">
+                            <label for="languageSelect" class="form-label">Select Language:</label>
+                            <select class="form-select" id="languageSelect">  
+                                <option value="hi-IN">Hindi (India)</option>
+                                <option value="en-US">English (US)</option>
+                                <!-- Add more language options as needed -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <!-- <label for="questionText" class="form-label">Transcribed Text:</label> -->
+                            <textarea class="form-control" id="result" rows="10" placeholder="Transcribed text"></textarea>
+                        </div>
+                        <div class="text-center">
+                            <button id="startRecord" class="btn btn-primary btn-record">
+                                <i class="fas fa-microphone me-2"></i>
+                                Start Recording
+                            </button>
+                            <button id="stopRecord" class="btn btn-danger btn-record d-none">
+                                <i class="fas fa-stop-circle me-2"></i>
+                                Stop Recording
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button id="addQuestion" class="btn btn-success">
+                        <i class="fas fa-plus-circle me-2"></i>
+                        Add Question
+                    </button>
+                    <button id="generatePaper" class="btn btn-info float-end">
+                        <i class="fas fa-file-alt me-2"></i>
+                        Save document
+                    </button>
+                </div>
+                <!-- <div id="questionList" class="mt-4">
+                    Questions will be added here dynamically
+                </div> -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // This is a placeholder for the speech recognition functionality
+        // You'll need to implement this using JavaScript's Web Speech API or a similar library
+        let mediaRecorder;
+        let isRecording = false;
+        let audioChunks = [];
+
+        document.getElementById('startRecord').addEventListener('click', function() {
+            this.classList.add('d-none');
+            document.getElementById('stopRecord').classList.remove('d-none');
+            
+            const language = document.getElementById('languageSelect').value;
+            
+            // Initialize speech recognition with selected language
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.start();
+                        audioChunks = [];
+                        isRecording = true;
+
+                        mediaRecorder.addEventListener("dataavailable", event => {
+                            audioChunks.push(event.data);
+                        });
+
+                        mediaRecorder.addEventListener("stop", () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            const formData = new FormData();
+                            formData.append("audio", audioBlob);
+
+                            fetch("{% url 'recognize_speech' %}", {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-CSRFToken': '{{ csrf_token }}',
+                                },
+                            })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.text) {
+                                        document.getElementById('result').value += data.text;
+                                    } else if (data.error) {
+                                        alert("Sorry, I could not understand.")
+                                    }
+                                });
+                        });
+                    });
+        });
+
+        document.getElementById('stopRecord').addEventListener('click', function() {
+            this.classList.add('d-none');
+            document.getElementById('startRecord').classList.remove('d-none');
+            if (isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+            }
+        });
+
+        document.getElementById('generatePaper').addEventListener('click', function() {
+            // Logic to generate and download the question paper
+            alert('Question paper generated! (This is a placeholder action)');
+        });
+
+        // Event delegation for removing questions
+        document.getElementById('questionList').addEventListener('click', function(e) {
+            if (e.target.closest('.btn-outline-danger')) {
+                e.target.closest('.card').remove();
+            }
+        });
+    </script>
+</body>
+</html>
